@@ -1,0 +1,79 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'io.spring.dependency-management' version "${springDependencyManagementVersion}"
+    id 'jacoco'
+}
+
+group = 'com.kios.mock'
+version = projectVersion
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(javaVersion as int)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Azure Storage Blob
+    implementation "com.azure:azure-identity:${azureIdentityVersion}"
+    implementation "com.azure:azure-storage-blob:${azureStorageBlobVersion}"
+
+    // Utilities
+    implementation "org.apache.commons:commons-lang3:${commonsLang3Version}"
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // Springdoc / Swagger UI
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+
+    // Logstash structured logging
+    implementation "net.logstash.logback:logstash-logback-encoder:${logstashVersion}"
+
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+jacoco {
+    toolVersion = '0.8.12'
+}
+
+tasks.named('jacocoTestReport') {
+    dependsOn tasks.named('test')
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+}
+
+springBoot {
+    buildInfo()
+    mainClass = 'com.kios.mock.pos.MockPosServiceApplication'
+}
+
+tasks.named('bootJar') {
+    archiveFileName = "${project.name}-${project.version}.jar"
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('processResources') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
