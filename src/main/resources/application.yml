@@ -1,0 +1,42 @@
+spring:
+    application:
+        name: kios-mock-pos-service
+
+server:
+    port: 8085
+
+# ─── Azure Blob Storage ───────────────────────────────────────────────────────
+# Option A – connection string (local / dev only, never commit real values):
+#   azure.storage.connection-string=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;...
+#
+# Option B – Managed Identity / DefaultAzureCredential (staging / prod):
+#   Comment out connection-string and provide account-url instead.
+azure:
+    storage:
+        # Uncomment ONE of the two authentication options:
+        # connection-string: ${AZURE_STORAGE_CONNECTION_STRING}  # Option A
+        account-url: ${AZURE_STORAGE_ACCOUNT_URL:https://<account>.blob.core.windows.net} # Option B
+        container-name: ${AZURE_STORAGE_CONTAINER_NAME:pos-data}
+
+# ─── Actuator ─────────────────────────────────────────────────────────────────
+management:
+    endpoints:
+        web:
+            exposure:
+                include: health,info,metrics
+    endpoint:
+        health:
+            show-details: always
+
+# ─── Springdoc / Swagger UI ───────────────────────────────────────────────────
+springdoc:
+    swagger-ui:
+        path: /swagger-ui.html
+    api-docs:
+        path: /v3/api-docs
+
+# ─── Logging ──────────────────────────────────────────────────────────────────
+logging:
+    level:
+        com.kios.mock.pos: DEBUG
+        com.azure: WARN
