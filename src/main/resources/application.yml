@@ -3,7 +3,9 @@ spring:
         name: kios-mock-pos-service
 
 server:
-    port: 8085
+    port: ${SERVER_PORT:8085}
+    servlet:
+        context-path: /mockpos
 
 # ─── Azure Blob Storage ───────────────────────────────────────────────────────
 # Option A – connection string (local / dev only, never commit real values):
@@ -13,10 +15,9 @@ server:
 #   Comment out connection-string and provide account-url instead.
 azure:
     storage:
-        # Uncomment ONE of the two authentication options:
-        # connection-string: ${AZURE_STORAGE_CONNECTION_STRING}  # Option A
-        account-url: ${AZURE_STORAGE_ACCOUNT_URL:https://<account>.blob.core.windows.net} # Option B
-        container-name: ${AZURE_STORAGE_CONTAINER_NAME:pos-data}
+        connection-string: ${AZURE_STORAGE_CONNECTION_STRING}  # Required – set via env var or .env file (never commit real keys)
+        container-name: ${AZURE_STORAGE_CONTAINER_NAME:qakiosblob}
+        blob-folder: ${AZURE_STORAGE_BLOB_FOLDER:mock-catalogsync}
 
 # ─── Actuator ─────────────────────────────────────────────────────────────────
 management:

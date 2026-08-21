@@ -3,6 +3,8 @@ package com.kios.mock.pos.service;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.sas.BlobSasPermission;
+import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +12,12 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.OffsetDateTime;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -26,6 +34,73 @@ public class BlobDownloadService {
 
     @Value("${azure.storage.container-name}")
     private String containerName;
+
+    /** How long (in minutes) the generated SAS token remains valid. */
+    @Value("${azure.storage.sas-expiry-minutes:60}")
+    private long sasExpiryMinutes;
+
+    /**
+     * Generates a short-lived SAS URL for {@code blobName}.
+     *
+     * @param blobName path / name of the blob inside the container
+     * @return fully-qualified HTTPS URL with embedded SAS query string
+     * @throws IllegalArgumentException if the blob does not exist
+     */
+    public String generateSasUrl(String blobName) {
+        log.info("Generating SAS URL for blob '{}' in container '{}'", blobName, containerName);
+
+        BlobContainerClient containerClient = blobServiceClient.getBlobContainerClient(containerName);
+        BlobClient blobClient = containerClient.getBlobClient(blobName);
+
+        if (!blobClient.exists()) {
+            throw new IllegalArgumentException(
+                    "Blob not found: container='%s', blob='%s'".formatted(containerName, blobName));
+        }
+
+        BlobSasPermission permission = new BlobSasPermission().setReadPermission(true);
+        BlobServiceSasSignatureValues sasValues = new BlobServiceSasSignatureValues(
+                OffsetDateTime.now().plusMinutes(sasExpiryMinutes), permission);
+
+        String sasToken = blobClient.generateSas(sasValues);
+        String sasUrl = blobClient.getBlobUrl() + "?" + sasToken;
+        log.info("SAS URL generated for blob '{}' (expires in {} min)", blobName, sasExpiryMinutes);
+        return sasUrl;
+    }
+
+    /**
+     * Downloads the blob content directly from a pre-built SAS URL.
+     *
+     * @param sasUrl the fully-qualified SAS URL pointing to the blob
+     * @return raw bytes of the blob content
+     * @throws IOException          if the HTTP call or stream reading fails
+     * @throws IllegalStateException if the server returns a non-200 status
+     */
+    public byte[] downloadFromSasUrl(String sasUrl) throws IOException {
+        log.info("Downloading blob from SAS URL: {}", sasUrl);
+
+        HttpClient httpClient = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(sasUrl))
+                .GET()
+                .build();
+
+        HttpResponse<InputStream> response;
+        try {
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("HTTP request interrupted while downloading from SAS URL", e);
+        }
+
+        if (response.statusCode() != 200) {
+            throw new IllegalStateException(
+                    "Unexpected HTTP status %d when downloading from SAS URL".formatted(response.statusCode()));
+        }
+
+        byte[] content = response.body().readAllBytes();
+        log.info("Downloaded {} bytes from SAS URL", content.length);
+        return content;
+    }
 
     /**
      * Downloads {@code blobName} from the configured container, compresses it
