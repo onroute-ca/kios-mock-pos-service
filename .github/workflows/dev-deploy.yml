@@ -1,0 +1,127 @@
+name: Deploy kios-mock-pos-service to DEV Environment
+
+on:
+  push:
+    branches:
+      - develop
+
+env:
+  environment: dev
+  ACR_NAME: ${{ secrets.DEV_ACR_NAME }}
+  ACR_LOGIN_SERVER: ${{ secrets.DEV_ACR_LOGIN_SERVER }}
+  IMAGE_NAME: kios-mock-pos-service
+  AKS_CLUSTER_NAME: ${{ secrets.DEV_AKS_CLUSTER_NAME }}
+  AKS_RESOURCE_GROUP: ${{ secrets.DEV_AKS_RESOURCE_GROUP }}
+  NAMESPACE: orchestration-dev
+  DEPLOYMENT_NAME: kios-mock-pos-service-dev
+  CONTAINER_NAME: kios-mock-pos-service-dev
+
+concurrency:
+  group: dev-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-test-push:
+    name: Build, test, and push image
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', 'gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      # Unlike the other middleware repos, this Dockerfile is a thin JRE image
+      # that COPYs build/libs/*.jar — so the jar must be built here first.
+      # `build` also runs the tests, so no separate test step is needed.
+      - name: Build and test
+        run: ./gradlew build --no-daemon
+
+      - name: Compute image tag
+        id: meta
+        run: echo "image-tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.DEV_AZURE_CREDENTIALS }}
+
+      - name: Log in to ACR
+        run: az acr login --name "$ACR_NAME"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.image-tag }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:dev-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to AKS
+    needs: build-test-push
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      IMAGE_TAG: ${{ needs.build-test-push.outputs.image-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.DEV_AZURE_CREDENTIALS }}
+
+      - name: AKS login
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.DEV_AKS_RESOURCE_GROUP }} \
+            --name ${{ secrets.DEV_AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+
+      - name: Install Kubelogin
+        run: sudo az aks install-cli
+
+      - name: convert kubeconfig to use Azure Cli auth
+        run: |
+          kubelogin convert-kubeconfig -l azurecli
+
+      - name: Ensure namespace exists
+        run: |
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      # Only the deployment+service manifest exists for this service —
+      # no configmap / ingress / PVC / scaling files (in-cluster mock, plain env vars).
+      - name: Apply dev manifests
+        run: |
+          kubectl apply -n "$NAMESPACE" -f k8s/dev/enhanced-service-deployment.yaml
+
+      - name: Roll out new image
+        run: |
+          kubectl set image deployment/"$DEPLOYMENT_NAME" \
+            "$CONTAINER_NAME"="$ACR_LOGIN_SERVER/$IMAGE_NAME:$IMAGE_TAG" \
+            -n "$NAMESPACE"
+          kubectl rollout status deployment/"$DEPLOYMENT_NAME" -n "$NAMESPACE" --timeout=300s
