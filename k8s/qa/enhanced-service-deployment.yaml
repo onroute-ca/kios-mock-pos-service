@@ -1,0 +1,120 @@
+# AKS Deployment + Service for kios-mock-pos-service (qa)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kios-mock-pos-service-qa
+  namespace: mock-pos-qa
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kios-mock-pos-service-qa
+  template:
+    metadata:
+      labels:
+        app: kios-mock-pos-service-qa
+      annotations:
+        fluentbit.io/exclude: "false"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8085"
+    spec:
+      nodeSelector:
+        agentpool: middleware
+      tolerations:
+        - key: "workload"
+          operator: "Equal"
+          value: "middleware"
+          effect: "NoSchedule"
+      imagePullSecrets:
+        - name: acr-secret
+      containers:
+        - name: kios-mock-pos-service-qa
+          image: qakiosacr.azurecr.io/kios-mock-pos-service-qa:v1.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8085
+              name: http
+
+          envFrom:
+            - secretRef:
+                name: kios-mock-pos-service-secrets-qa
+            - configMapRef:
+                name: kios-mock-pos-service-config-qa
+            - configMapRef:
+                name: insights-config
+
+          # Mount Key Vault secrets
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: "/mnt/secrets-store"
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+          # Health checks — context-path is /mockpos (application.yml)
+          readinessProbe:
+            httpGet:
+              path: /mockpos/actuator/health
+              port: 8085
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /mockpos/actuator/health
+              port: 8085
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          startupProbe:
+            httpGet:
+              path: /mockpos/actuator/health
+              port: 8085
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+            timeoutSeconds: 5
+
+      volumes:
+        # Azure Key Vault CSI volume
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "kios-mock-pos-service-keyvault-secrets"
+
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+# Service for kios-mock-pos-service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kios-mock-pos-service-qa
+  namespace: mock-pos-qa
+  labels:
+    app: kios-mock-pos-service-qa
+spec:
+  type: ClusterIP
+  selector:
+    app: kios-mock-pos-service-qa
+  ports:
+    - port: 80
+      targetPort: 8085
+      protocol: TCP
+      name: http

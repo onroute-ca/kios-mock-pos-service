@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-headers
+  namespace: mock-pos-qa
+data:
+  Upgrade: "$http_upgrade"
+  Connection: "Upgrade"

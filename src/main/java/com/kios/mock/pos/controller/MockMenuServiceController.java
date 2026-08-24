@@ -36,6 +36,24 @@ public class MockMenuServiceController {
         /** Holds an optional override blob path set via PATCH. Null means use the default derived from headers. */
         private final AtomicReference<String> overrideBlobPath = new AtomicReference<>(null);
 
+        // ─── GET: read current blob path override ──────────────────────────────
+
+        @Operation(
+                summary = "Read current blob path override",
+                description = "Returns the blob path currently set via PATCH, or a message indicating the default derivation logic is active.",
+                responses = {
+                                @ApiResponse(responseCode = "200", description = "Current blob path state returned")
+                }
+        )
+        @GetMapping("/v1/Menu/blob-path")
+        public ResponseEntity<String> getBlobPath() {
+                String current = overrideBlobPath.get();
+                if (current == null) {
+                        return ResponseEntity.ok("default (derived from x-StoreNumber and x-MenuVersion headers)");
+                }
+                return ResponseEntity.ok(current);
+        }
+
         // ─── PATCH: configure blob path ───────────────────────────────────────
 
         @Operation(
@@ -98,5 +116,38 @@ public class MockMenuServiceController {
                                 .contentType(MediaType.parseMediaType("application/zip"))
                                 .contentLength(zipBytes.length)
                                 .body(zipBytes);
+        }
+
+        // ─── GET: SAS URL ──────────────────────────────────────────────────────
+
+        @Operation(
+                summary = "Generate SAS URL for a blob",
+                description = "Returns a short-lived SAS URL for the requested blob path. Useful for debugging or direct download links without going through the ZIP wrapper.",
+                responses = {
+                                @ApiResponse(responseCode = "200", description = "SAS URL returned"),
+                                @ApiResponse(responseCode = "400", description = "Blob not found")
+                }
+        )
+        @GetMapping("/v1/Menu/sas-url")
+        public ResponseEntity<String> getSasUrl(
+                        @RequestHeader("x-api-key") String apiKey,
+                        @RequestHeader("x-StoreNumber") String storeNumber,
+                        @RequestHeader("x-MenuVersion") String menuVersion) {
+
+                String override = overrideBlobPath.get();
+                String blobName = (override != null)
+                                ? override
+                                : "%s/%s_%s.json".formatted(blobFolder, storeNumber, menuVersion);
+                log.info("GET sas-url - store={}, version={}, blob='{}' ({})",
+                                storeNumber, menuVersion, blobName,
+                                override != null ? "override" : "derived");
+
+                try {
+                        String sasUrl = blobDownloadService.generateSasUrl(blobName);
+                        return ResponseEntity.ok(sasUrl);
+                } catch (IllegalArgumentException ex) {
+                        log.warn("Blob not found for SAS URL: {}", ex.getMessage());
+                        return ResponseEntity.badRequest().body(ex.getMessage());
+                }
         }
 }

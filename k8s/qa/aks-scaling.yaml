@@ -1,0 +1,94 @@
+# ==============================================================================
+# Kiosk Mock POS Service Horizontal Pod Autoscaler - QA Configuration
+# ==============================================================================
+# This HPA automatically scales kios-mock-pos-service pods based on CPU and
+# memory utilization.
+#
+# Requirements:
+# - Metrics Server must be installed in the cluster
+# - Resource requests must be defined in the Deployment
+#
+# Verify Metrics Server:
+#   kubectl get deployment metrics-server -n kube-system
+#
+# Check HPA status:
+#   kubectl get hpa -n mock-pos-qa
+#   kubectl describe hpa kios-mock-pos-service-hpa -n mock-pos-qa
+# ==============================================================================
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kios-mock-pos-service-hpa
+  namespace: mock-pos-qa
+  labels:
+    app: kios-mock-pos-service-qa
+    component: autoscaler
+  annotations:
+    description: "Autoscales kios-mock-pos-service deployment based on CPU and memory utilization"
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kios-mock-pos-service-qa
+
+  minReplicas: 1
+  maxReplicas: 2
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 90
+
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 90
+
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
+      selectPolicy: Max
+
+---
+# ==============================================================================
+# Pod Disruption Budget - Ensure High Availability During Updates
+# ==============================================================================
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kios-mock-pos-service-pdb
+  namespace: mock-pos-qa
+  labels:
+    app: kios-mock-pos-service-qa
+    component: disruption-budget
+  annotations:
+    description: "Ensures at least 1 kios-mock-pos-service pod is available during disruptions"
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: kios-mock-pos-service-qa
