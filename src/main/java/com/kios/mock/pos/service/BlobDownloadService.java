@@ -76,11 +76,13 @@ public class BlobDownloadService {
      * @throws IllegalStateException if the server returns a non-200 status
      */
     public byte[] downloadFromSasUrl(String sasUrl) throws IOException {
-        log.info("Downloading blob from SAS URL: {}", sasUrl);
+        URI uri = URI.create(sasUrl);
+        String redactedUrl = uri.getScheme() + "://" + uri.getAuthority() + uri.getPath();
+        log.info("Downloading blob from SAS URL: {} (SAS query redacted)", redactedUrl);
 
         HttpClient httpClient = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(sasUrl))
+                .uri(uri)
                 .GET()
                 .build();
 
