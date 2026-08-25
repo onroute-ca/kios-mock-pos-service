@@ -1,5 +1,4 @@
 # Environment
-.env
 
 # Gradle
 .gradle/
@@ -18,3 +17,5 @@ logs/
 
 # OS
 .DS_Store
+config.bat
+node_modules
