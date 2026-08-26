@@ -66,6 +66,24 @@ springBoot {
     mainClass = 'com.kios.mock.pos.MockPosServiceApplication'
 }
 
+// Load .env file into bootRun environment if it exists
+tasks.named('bootRun') {
+    def envFile = rootProject.file('.env')
+    if (envFile.exists()) {
+        envFile.readLines().each { line ->
+            def trimmed = line.trim()
+            if (trimmed && !trimmed.startsWith('#')) {
+                def idx = trimmed.indexOf('=')
+                if (idx > 0) {
+                    def key = trimmed.substring(0, idx).trim()
+                    def value = trimmed.substring(idx + 1).trim()
+                    environment(key, value)
+                }
+            }
+        }
+    }
+}
+
 tasks.named('bootJar') {
     archiveFileName = "${project.name}-${project.version}.jar"
 }
