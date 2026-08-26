@@ -1,0 +1,34 @@
+# Application Insights Configuration for AKS
+# This file contains configurations needed for persistent Application Insights
+# telemetry and container logging in Azure Kubernetes Service
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: insights-config
+    namespace: mock-pos-qa
+data:
+    # Azure Monitor OpenTelemetry exporters
+    OTEL_TRACES_EXPORTER: "azuremonitor"
+    OTEL_METRICS_EXPORTER: "azuremonitor"
+    OTEL_LOGS_EXPORTER: "azuremonitor"
+
+    # OpenTelemetry Configuration for persistent telemetry
+    OTEL_EXPORTER_OTLP_TIMEOUT: "60000"
+    OTEL_BSP_SCHEDULE_DELAY: "1000"
+    OTEL_BSP_EXPORT_TIMEOUT: "60000"
+    OTEL_BSP_MAX_QUEUE_SIZE: "8192"
+    OTEL_BSP_MAX_EXPORT_BATCH_SIZE: "1024"
+    OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT: "4096"
+    OTEL_ATTRIBUTE_COUNT_LIMIT: "1024"
+    OTEL_SPAN_ATTRIBUTE_VALUE_LENGTH_LIMIT: "4096"
+    OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT: "1024"
+    OTEL_LOG_LEVEL: "info"
+    OTEL_SDK_DISABLED: "false"
+
+    OTEL_SERVICE_NAMESPACE: "kios-mock-pos-service-qa"
+    OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=qa,k8s.namespace.name=mock-pos-qa"
+
+    NODE_ENV: "qa"
+    K8S_NAMESPACE: "mock-pos-qa"
+    CONTAINER_NAME: "kios-mock-pos-service-qa"
