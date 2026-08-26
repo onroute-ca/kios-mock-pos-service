@@ -1,5 +1,5 @@
 # ConfigMap for non-sensitive kios-mock-pos-service configuration
-# Secrets (AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_CONTAINER_NAME)
+# Secrets (AZURE_STORAGE_CONNECTION_STRING, AZURE_STORAGE_KIOS_INTEGRATION_CONTAINER_NAME)
 # must be supplied via a separate Secret (e.g. kios-mock-pos-service-secrets-qa)
 # sourced from Azure Key Vault CSI and NOT stored here.
 apiVersion: v1
@@ -13,5 +13,5 @@ data:
   SPRING_PROFILES_ACTIVE: "qa"
 
   # Azure Blob Storage (non-sensitive)
-  AZURE_STORAGE_CONTAINER_NAME: "qakiosblob"
+  AZURE_STORAGE_KIOS_INTEGRATION_CONTAINER_NAME: "kios-integration"
   AZURE_STORAGE_BLOB_FOLDER: "mock-catalogsync"
