@@ -16,7 +16,7 @@ server:
 azure:
     storage:
         connection-string: ${AZURE_STORAGE_CONNECTION_STRING}  # Required – set via env var or .env file (never commit real keys)
-        container-name: ${AZURE_STORAGE_CONTAINER_NAME:qakiosblob}
+        container-name: ${AZURE_STORAGE_KIOS_INTEGRATION_CONTAINER_NAME:kios-integration}
         blob-folder: ${AZURE_STORAGE_BLOB_FOLDER:mock-catalogsync}
 
 # ─── Actuator ─────────────────────────────────────────────────────────────────
